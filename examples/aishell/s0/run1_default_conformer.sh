@@ -16,8 +16,13 @@ fi
 export CUDA_VISIBLE_DEVICES="${gpu_list}"
 echo "CUDA_VISIBLE_DEVICES is ${CUDA_VISIBLE_DEVICES}"
 
-stage=0 # start from 0 if you need to start from data preparation
-stop_stage=5
+####################
+## 整体建议一步一步训练
+## -1 下载数据
+## 0
+## 4 是开始训练
+stage=1 # start from 0 if you need to start from data preparation
+stop_stage=1
 
 # You should change the following two parameters for multiple machine training,
 # see https://pytorch.org/docs/stable/elastic/run.html
@@ -27,7 +32,10 @@ job_id=2023
 
 # The aishell dataset location, please change this to your own path
 # make sure of using absolute path. DO-NOT-USE relatvie path!
-data=/export/data/asr-data/OpenSLR/33/
+# 是个是下载数据到的目录， Stage -1: Download data
+# bash run.sh --stage -1 --stop_stage -1
+#data=/export/data/asr-data/OpenSLR/33/
+data=/root/data_aishell1/
 data_url=www.openslr.org/resources/33
 
 nj=16
@@ -54,7 +62,7 @@ train_config=conf/train_conformer.yaml
 dir=exp/conformer
 tensorboard_dir=tensorboard
 checkpoint=
-num_workers=8
+num_workers=8 #默认就是8，太高CPU过热降频
 prefetch=10
 
 # use average_checkpoint will get better result
@@ -70,19 +78,23 @@ deepspeed_save_states="model_only"
 
 . tools/parse_options.sh || exit 1;
 
+###### -1 下载 ###### ———————————————————————————————————————————————————————————— OK 手动下载
 if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
   echo "stage -1: Data Download"
   local/download_and_untar.sh ${data} ${data_url} data_aishell
   local/download_and_untar.sh ${data} ${data_url} resource_aishell
 fi
 
+###### 0 数据准备 ###### —————————————————————————————————————————————————————————— OK
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
   # Data preparation
   local/aishell_data_prep.sh ${data}/data_aishell/wav \
     ${data}/data_aishell/transcript
+  
+  echo "====== stage 0 done"
 fi
 
-
+###### 1 compute_cmvn_stats  ###### ——————————————————————————————————————————————— 会处理每个wav OK
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
   # remove the space between the text labels for Mandarin dataset
   for x in train dev test; do
@@ -90,7 +102,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     paste -d " " <(cut -f 1 -d" " data/${x}/text.org) \
       <(cut -f 2- -d" " data/${x}/text.org | tr -d " ") \
       > data/${x}/text
-    rm data/${x}/text.org
+    rm data/${x}/text.org ### 这里应该没有
   done
 
   tools/compute_cmvn_stats.py --num_workers 16 --train_config $train_config \
@@ -98,6 +110,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     --out_cmvn data/$train_set/global_cmvn
 fi
 
+###### 2 生成 data/dict/lang_char.txt ###### —————————————————————————————————————————————————————————————— OK
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   echo "Make a dictionary"
   mkdir -p $(dirname $dict)
@@ -109,6 +122,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     awk '{print $0 " " NR+2}' >> ${dict}
 fi
 
+###### 3 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   echo "Prepare data, prepare required format"
   for x in dev test ${train_set}; do
@@ -123,6 +137,8 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   done
 fi
 
+###### 4
+## —— 需要安装 Cuda toolkit
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
   mkdir -p $dir
   num_gpus=$(echo $CUDA_VISIBLE_DEVICES | awk -F "," '{print NF}')
