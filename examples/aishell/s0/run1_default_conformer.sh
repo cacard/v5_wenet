@@ -1,3 +1,8 @@
+###################################################
+# by licunqing
+# 从 run.sh拷贝，先把默认数据集跑通
+###################################################
+
 #!/bin/bash
 
 # Copyright 2019 Mobvoi Inc. All Rights Reserved.
@@ -21,8 +26,8 @@ echo "CUDA_VISIBLE_DEVICES is ${CUDA_VISIBLE_DEVICES}"
 ## -1 下载数据
 ## 0
 ## 4 是开始训练
-stage=1 # start from 0 if you need to start from data preparation
-stop_stage=1
+stage=4 # start from 0 if you need to start from data preparation
+stop_stage=4
 
 # You should change the following two parameters for multiple machine training,
 # see https://pytorch.org/docs/stable/elastic/run.html
